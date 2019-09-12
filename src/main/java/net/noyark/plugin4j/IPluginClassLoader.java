@@ -1,6 +1,6 @@
 package net.noyark.plugin4j;
 
-import java.io.IOException;
+
 import java.util.List;
 
 public interface IPluginClassLoader {
