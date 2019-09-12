@@ -9,7 +9,7 @@ import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
-
+@NoyarkCore(name = "plugin4j",version = "beta01",description = "a plugin load framework")
 public class PluginClassLoader extends URLClassLoader implements IPluginClassLoader{
 
     private static Map<String,Map<JarFile,JarEntry>> entriesMap = new HashMap<>();
@@ -85,8 +85,8 @@ public class PluginClassLoader extends URLClassLoader implements IPluginClassLoa
     }
 
     @Override
-    public List<PluginData> loadPlugins()  {
-        List<PluginData> datas = new ArrayList<>();
+    public List<IPluginData> loadPlugins()  {
+        List<IPluginData> datas = new ArrayList<>();
         //加载插件,扫描每个文件的类文件
         Map<JarFile,JarEntry> entryMap = entriesMap.get(config.getFile());
         for(JarFile f:entryMap.keySet()){
@@ -94,34 +94,59 @@ public class PluginClassLoader extends URLClassLoader implements IPluginClassLoa
             Enumeration<JarEntry> entries = f.entries();
             while (entries.hasMoreElements()){
                 JarEntry e = entries.nextElement();
-                String className = getEntryClassName(e);
-                try {
-                    Class<?> clz = this.loadClass(className);
-                    if(config.getAnnotation()==null){
-                        if(config.getBase().equals(getSuperClass(clz))){
-                            handlers.forEach((x)->x.handleMain(clz));
-                            data.setMainClass(clz);
-                        }else{
-                            handlers.forEach((x)->x.handle(clz));
-                            data.getClasses().add(clz);
-                        }
-
-                    }else{
-                        if(clz.getAnnotation(config.getAnnotation())!=null){
-                            handlers.forEach((x)->x.handleMain(clz));
-                            data.setMainClass(clz);
-                        }else{
-                            handlers.forEach((x)->x.handle(clz));
-                            data.getClasses().add(clz);
-                        }
-                    }
-                }catch (ClassNotFoundException e1){
-                    e1.printStackTrace();
+                if(e.getName().endsWith(".class")){
+                    handleClass(data,e);
+                }else{
+                    handleResources(data,e,f);
                 }
             }
             datas.add(data);
         }
         return datas;
+    }
+
+
+    private void handleResources(PluginData data,JarEntry e,JarFile f){
+        try {
+            data.getResources().add(f.getInputStream(e));
+        }catch (IOException e2){
+            e2.printStackTrace();
+        }
+    }
+
+    private void handleClass(PluginData data,JarEntry e){
+        String className = getEntryClassName(e);
+        try {
+            Class<?> clz = this.loadClass(className);
+            if(config.getAnnotation()==null){
+                if(config.getBase().equals(getSuperClass(clz))){
+                    handle(true,clz);
+                    data.setMainClass(clz);
+                }else{
+                    handle(false,clz);
+                    data.getClasses().add(clz);
+                }
+
+            }else{
+                if(clz.getAnnotation(config.getAnnotation())!=null){
+                    handle(true,clz);
+                    data.setMainClass(clz);
+                }else{
+                    handle(false,clz);
+                    data.getClasses().add(clz);
+                }
+            }
+
+        }catch (ClassNotFoundException e1){
+            e1.printStackTrace();
+        }
+    }
+    private void handle(boolean isMain,Class clz){
+        if(isMain){
+            handlers.forEach((x)->x.handleMain(clz));
+        }else{
+            handlers.forEach((x)->x.handle(clz));
+        }
     }
 
     //检查这个文件名称是否符合,不符合返回false
