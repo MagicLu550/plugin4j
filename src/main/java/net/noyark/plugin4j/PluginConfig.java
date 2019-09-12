@@ -6,13 +6,19 @@ import java.util.List;
 
 public class PluginConfig {
 
-    private List<String> files;
+    public static final int AND = 1;
 
-    private List<String> ends;
+    public static final int OR = 0;
+
+    private String file = "";
+
+    private List<String> patterns;
+
+    private int getFilePattern = 0;
 
     private Class base;
 
-    private Annotation annotation;
+    private Class<? extends Annotation> annotation;
 
     private List<String> packages;//拦截的包名前缀
 
@@ -20,27 +26,40 @@ public class PluginConfig {
         this.packages = packages;
     }
 
+    public void setGetFilePattern(int getFilePattern) {
+        this.getFilePattern = getFilePattern;
+    }
+
     public List<String> getPackages() {
         return packages;
     }
 
-    public void setRegex(String... file){
-        this.files = Arrays.asList(file);
+    public int getGetFilePattern() {
+        return getFilePattern;
     }
 
-    public void setFileEnd(String... ends){
-        this.ends = Arrays.asList(ends);
+    public String getFile() {
+        return file;
     }
+
+    public void setFile(String file) {
+        this.file = file;
+    }
+
+    public void setRegex(String... file){
+        this.patterns = Arrays.asList(file);
+    }
+
 
     public void setPluginBase(Class base){
         this.base = base;
     }
 
-    public void setBaseAnnotation(Annotation annotation){
+    public void setBaseAnnotation(Class<? extends Annotation> annotation){
         this.annotation = annotation;
     }
 
-    public Annotation getAnnotation() {
+    public Class<? extends Annotation> getAnnotation() {
         return annotation;
     }
 
@@ -48,11 +67,8 @@ public class PluginConfig {
         return base;
     }
 
-    public List<String> getEnds() {
-        return ends;
-    }
 
-    public List<String> getFiles() {
-        return files;
+    public List<String> getPatterns() {
+        return patterns;
     }
 }

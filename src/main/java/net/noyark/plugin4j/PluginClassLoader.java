@@ -1,123 +1,151 @@
 package net.noyark.plugin4j;
 
+
 import java.io.File;
 import java.io.IOException;
-import java.lang.annotation.Annotation;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.List;
+import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
-public class PluginClassLoader implements IPluginClassLoader{
+
+public class PluginClassLoader extends URLClassLoader implements IPluginClassLoader{
+
+    private static Map<String,Map<JarFile,JarEntry>> entriesMap = new HashMap<>();
 
     private PluginConfig config;
 
     private List<Handler> handlers = new ArrayList<Handler>();
 
+
+    public PluginClassLoader(PluginConfig config) throws IOException {
+        super(urls(config),getClassLoader());
+        this.config = config;
+    }
+
+    /**
+     * 获取urls
+     * @param config
+     * @return
+     * @throws IOException
+     */
+    private static URL[] urls(PluginConfig config) throws IOException{
+
+        File file = new File(config.getFile());
+        File[] files = file.listFiles();
+
+        if(files!=null){
+            URL[] urls = new URL[files.length];
+            int index = 0;
+            for(File f:files){
+                if(checkIsThisFile(config,f.getName())) {
+                    JarFile jarFile = new JarFile(f);
+
+                    urls[index] = f.toURI().toURL();
+
+                    init(jarFile,config.getFile());
+                }
+            }
+            return urls;
+        }
+        return new URL[0];
+    }
+
+
+
+    private static void init(JarFile jarFile,String parent){
+        if(entriesMap.get(parent).containsKey(jarFile)){
+            return;//已经加载过了则不需要了
+        }
+        Enumeration<JarEntry> entries = jarFile.entries();
+        while (entries.hasMoreElements()){
+            JarEntry entry = entries.nextElement();
+            if(entriesMap.get(parent)==null)entriesMap.put(parent,new HashMap<>());
+            else entriesMap.get(parent).put(jarFile,entry);
+        }
+    }
+
+    private static ClassLoader getClassLoader(){
+        return PluginClassLoader.class.getClassLoader();
+    }
+
+    private String getEntryClassName(JarEntry entry){
+        return entry.getName().substring(0,entry.getName().lastIndexOf(".")).replace("/",".");
+    }
+
+    public Map<String,Map<JarFile, JarEntry>> getEntriesMap() {
+        return entriesMap;
+    }
+
+
+
     public void setConfig(PluginConfig config) {
         this.config = config;
     }
 
-    public List<PluginData> loadPlugins(File baseFile) throws IOException {
-        if(config == null){
-            config = new PluginConfig();
-        }
-        if(config.getBase()==null){
-            throw new PluginException("no main 'Plugin' class");
-        }
-        List<PluginData> pluginDatas = new ArrayList<>();
-        try{
-            URLClassLoader classLoader = new URLClassLoader(new URL[]{new URL(baseFile.toString())},this.getClass().getClassLoader());
-            File[] files = baseFile.listFiles();
-            if(files!=null){
-                for(File file:files){
-                    boolean isFile = false;
-                    if(config.getEnds()!=null){
-                        for(String s:config.getEnds()){
-                            if(file.toString().endsWith(s)){
-                                isFile = true;
-                                break;
-                            }
+    @Override
+    public List<PluginData> loadPlugins()  {
+        List<PluginData> datas = new ArrayList<>();
+        //加载插件,扫描每个文件的类文件
+        Map<JarFile,JarEntry> entryMap = entriesMap.get(config.getFile());
+        for(JarFile f:entryMap.keySet()){
+            PluginData data = new PluginData();
+            Enumeration<JarEntry> entries = f.entries();
+            while (entries.hasMoreElements()){
+                JarEntry e = entries.nextElement();
+                String className = getEntryClassName(e);
+                try {
+                    Class<?> clz = this.loadClass(className);
+                    if(config.getAnnotation()==null){
+                        if(config.getBase().equals(getSuperClass(clz))){
+                            handlers.forEach((x)->x.handleMain(clz));
+                            data.setMainClass(clz);
+                        }else{
+                            handlers.forEach((x)->x.handle(clz));
+                            data.getClasses().add(clz);
+                        }
+
+                    }else{
+                        if(clz.getAnnotation(config.getAnnotation())!=null){
+                            handlers.forEach((x)->x.handleMain(clz));
+                            data.setMainClass(clz);
+                        }else{
+                            handlers.forEach((x)->x.handle(clz));
+                            data.getClasses().add(clz);
                         }
                     }
-                    if(config.getFiles()!=null){
-                        for(String s:config.getFiles()){
-                            if(file.getName().matches(s)){
-                                isFile = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if(config.getEnds()==null&&config.getFiles()==null){
-                        isFile = true;
-                    }
-
-
-                    if(isFile){
-                        PluginData data = new PluginData();
-
-                        List<Class> classes = new ArrayList<>();
-                        JarFile jarFile = new JarFile(file);
-                        jarFile.entries();
-                        Enumeration<JarEntry> entries = jarFile.entries();
-                        while (entries.hasMoreElements()) {
-                            JarEntry entry1 = entries.nextElement();
-                            String name = entry1.getName();
-                            if (name.endsWith(".class")) {
-                                String className = name.substring(0, name.lastIndexOf(".")).replace("/", ".");
-                                boolean canScan = true;
-                                if(config.getPackages()!=null){
-                                    for(String s:config.getPackages()){
-                                        if(className.contains(s)){
-                                            canScan = false;
-                                            break;
-                                        }
-                                    }
-                                }
-
-                                if(canScan){
-                                    Class clz = classLoader.loadClass(className);
-                                    Annotation annotation = config.getAnnotation();
-                                    for(Handler handler:getHandlers()){
-                                        boolean isMain = false;
-                                        if(annotation==null){
-                                            if(getSuperClass(clz)==config.getBase()){
-                                                handler.handleMain(clz);
-                                                data.setMainClass(clz);
-                                                isMain = true;
-                                            }
-                                        }else{
-                                            if(getSuperClass(clz).getAnnotation(annotation.getClass())!=null){
-                                                handler.handleMain(clz);
-                                                data.setMainClass(clz);
-                                                isMain = true;
-                                            }
-                                        }
-                                        if(!isMain) {
-                                            handler.handle(clz);
-                                            classes.add(clz);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        data.setClasses(classes);
-                        pluginDatas.add(data);
-                    }
-
+                }catch (ClassNotFoundException e1){
+                    e1.printStackTrace();
                 }
             }
-            return pluginDatas;
-        }catch (ClassNotFoundException e){
-            e.printStackTrace();
+            datas.add(data);
+        }
+        return datas;
+    }
+
+    //检查这个文件名称是否符合,不符合返回false
+    private static boolean checkIsThisFile(PluginConfig config,String fileName){
+        List<String> patterns = config.getPatterns();
+        boolean isFile = false;
+        if(patterns==null||patterns.isEmpty()){
+            isFile = true;
+        }else{
+            for(String s:patterns){
+                if(fileName.matches(s)){
+                    isFile = true;
+                    if(config.getGetFilePattern()==PluginConfig.OR)
+                        break;
+                }else{
+                    isFile = false;
+                }
+            }
         }
 
-        return null;
+        return isFile;
     }
+
+
 
     private static Class getSuperClass(Class<?> clz){
         if(clz.getSuperclass()==Object.class){
@@ -125,7 +153,6 @@ public class PluginClassLoader implements IPluginClassLoader{
         }
         while (true){
             clz = clz.getSuperclass();
-            System.out.println(clz);
             if(clz.getSuperclass()==Object.class){
                 return clz;
             }

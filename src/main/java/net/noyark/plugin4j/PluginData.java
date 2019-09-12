@@ -1,18 +1,16 @@
 package net.noyark.plugin4j;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class PluginData {
 
     private Class mainClass;
 
-    private List<Class> classes;
+    private List<Class> classes = new ArrayList<>();
 
-    public void setClasses(List<Class> classes) {
-        this.classes = classes;
-    }
 
-    public void setMainClass(Class mainClass) {
+    void setMainClass(Class mainClass) {
         this.mainClass = mainClass;
     }
 
