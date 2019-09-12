@@ -2,6 +2,9 @@ package net.noyark.plugin4j;
 
 
 import java.util.List;
+import java.util.Map;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 /**
  * 用于加载插件的类加载器,这里定义了插件类加载器的特质部分
@@ -27,4 +30,6 @@ public interface IPluginClassLoader {
      * @return 类加载器对象
      */
     List<Handler> getHandlers();
+
+    Map<JarFile, JarEntry> getEntriesMap();
 }

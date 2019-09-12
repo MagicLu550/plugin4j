@@ -74,8 +74,8 @@ public class PluginClassLoader extends URLClassLoader implements IPluginClassLoa
         return entry.getName().substring(0,entry.getName().lastIndexOf(".")).replace("/",".");
     }
 
-    public Map<String,Map<JarFile, JarEntry>> getEntriesMap() {
-        return entriesMap;
+    public Map<JarFile, JarEntry> getEntriesMap() {
+        return entriesMap.get(config.getFile());
     }
 
 
